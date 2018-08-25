@@ -1,10 +1,16 @@
 #include "DXCore.h"
-#include "WICTextureLoader.h"
 #include <wrl.h>
 #include <wrl/wrappers/corewrappers.h>
 
 ID3D11Device* Core::pDevice; 
 ID3D11DeviceContext* Core::pImmediateContext;
+ID3D11InputLayout* Core::pEntityInputLayout;
+ID3D11SamplerState* Core::pEntitySamplerState;
+
+ID3D10Blob* Core::VS; 
+ID3D10Blob* Core::GS; 
+ID3D10Blob* Core::PS; 
+
 
 namespace
 {
@@ -184,71 +190,11 @@ bool DXCore::initDirect3D()
 	Core::pDevice->CreateTexture2D(&textureDesc, nullptr, &m_pDepthStencilBuffer);
 	Core::pDevice->CreateDepthStencilView(m_pDepthStencilBuffer, nullptr, &m_pDepthStencilView); 
 
-	//Creating temporary texture for the quad
-	D3D11_TEXTURE2D_DESC quadTexDesc; 
-	quadTexDesc.Width = 50; 
-	quadTexDesc.Height = 50; 
-	quadTexDesc.MipLevels = 1; 
-	quadTexDesc.ArraySize = 1; 
-	quadTexDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-	quadTexDesc.SampleDesc.Count = 1;
-	quadTexDesc.SampleDesc.Quality = 0;
-	quadTexDesc.Usage = D3D11_USAGE_DEFAULT;
-	quadTexDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-	quadTexDesc.CPUAccessFlags = 0;
-	quadTexDesc.MiscFlags = 0;
-
-	result = Core::pDevice->CreateTexture2D(&quadTexDesc, nullptr, &m_pQuadTexture);
-
-	//Create sampler for quad tetxure
-	D3D11_SAMPLER_DESC quadSampDesc; 
-	quadSampDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR; 
-	quadSampDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP; 
-	quadSampDesc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP; 
-	quadSampDesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP; 
-	quadSampDesc.MipLODBias = 0.0f; 
-	quadSampDesc.MaxAnisotropy = 1; 
-	quadSampDesc.ComparisonFunc = D3D11_COMPARISON_ALWAYS; 
-	quadSampDesc.BorderColor[0] = 0; 
-	quadSampDesc.BorderColor[1] = 0;
-	quadSampDesc.BorderColor[2] = 0;
-	quadSampDesc.BorderColor[3] = 0;
-	quadSampDesc.MinLOD = 0; 
-
-	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-	HRESULT lol;
-
-	lol = Core::pDevice->CreateSamplerState(&quadSampDesc, &m_pQuadTexSampler);
-
-
 	//Prepare Texturing 
 	Windows::Foundation::Initialize();
 
-	std::string fileName = "flandre.jpg";
-	std::wstring widestr = std::wstring(fileName.begin(), fileName.end());
-	const wchar_t* widecstr = widestr.c_str();
-
-
-	//Shader resource view description for quad texture resource
-	D3D11_SHADER_RESOURCE_VIEW_DESC resViewDesc;
-	ZeroMemory(&resViewDesc, sizeof(resViewDesc));
-	resViewDesc.Format = quadTexDesc.Format;
-	resViewDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
-	resViewDesc.Texture2D.MipLevels = textureDesc.MipLevels;
-	resViewDesc.Texture2D.MostDetailedMip = 0;
-
-	//Create the shader resource view and tell it to use the quadTex as a resource. 
-	lol = Core::pDevice->CreateShaderResourceView(m_pQuadTexture, &resViewDesc, &m_pTextureView);
-	
-	//Cast the texture2D to a reosurce so you can offcially create a texture from a file. 
-	textureRes = dynamic_cast<ID3D11Resource*>(m_pQuadTexture);
-
-	//Puts the wished texture onto textureRes / quadTexture loaded from a file. 
-	lol = CreateWICTextureFromFile(Core::pDevice, Core::pImmediateContext, widecstr, &textureRes, &m_pTextureView);
-	
-
-	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	initVertexLayouts(); 
+	initSamplers(); 
 
 	//Bind Render Target View
 	Core::pImmediateContext->OMSetRenderTargets(1, &m_pRenderTargetView, nullptr); 
@@ -514,6 +460,79 @@ bool DXCore::initDirect3D()
 	ShowWindow(m_hGameWnd, SW_SHOW);
 
 	return true;
+}
+
+bool DXCore::initVertexLayouts()
+{
+	HRESULT result;
+
+	//Entity input layout
+	D3D11_INPUT_ELEMENT_DESC entInput[] = {
+
+		{ "POSITION",		// "semantic" name in shader
+		0,				// "semantic" index (not used)
+		DXGI_FORMAT_R32G32_FLOAT, //size of ONE element (2 floats)
+		0,							 // input slot
+		0,							 // offset of first element 
+		D3D11_INPUT_PER_VERTEX_DATA, // specify data PER vertex
+		0							 // used for INSTANCING (ignore)
+		},
+
+		{ "TEXCOORD",		// "semantic" name in shader
+		0,				// "semantic" index (not used)
+		DXGI_FORMAT_R32G32_FLOAT, //size of ONE element (2 floats)
+		0,						 // input slot
+		8,							 // offset of first element 
+		D3D11_INPUT_PER_VERTEX_DATA, // specify data PER vertex
+		0							 // used for INSTANCING (ignore)
+		},
+
+		{ "OPACITY",
+		0,							// same slot as previous (same vertexBuffer)
+		DXGI_FORMAT_R32_FLOAT,
+		0,
+		16,							// offset of FIRST element (after TEXCOORD)
+		D3D11_INPUT_PER_VERTEX_DATA,
+		0
+		},
+
+		{ "Z-ORDER",
+		0,
+		DXGI_FORMAT_R32_FLOAT,
+		0,
+		20,
+		D3D11_INPUT_PER_VERTEX_DATA,
+		0
+		}
+
+	};
+	Core::pDevice->CreateInputLayout(entInput, ARRAYSIZE(entInput), Core::VS->GetBufferPointer(), Core::VS->GetBufferSize(), &Core::pEntityInputLayout); 
+
+	return true; 
+}
+
+bool DXCore::initSamplers()
+{
+	HRESULT result; 
+
+	//Sampler for entity textures
+	D3D11_SAMPLER_DESC entSampDesc;
+	entSampDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+	entSampDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
+	entSampDesc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
+	entSampDesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+	entSampDesc.MipLODBias = 0.0f;
+	entSampDesc.MaxAnisotropy = 1;
+	entSampDesc.ComparisonFunc = D3D11_COMPARISON_ALWAYS;
+	entSampDesc.BorderColor[0] = 0;
+	entSampDesc.BorderColor[1] = 0;
+	entSampDesc.BorderColor[2] = 0;
+	entSampDesc.BorderColor[3] = 0;
+	entSampDesc.MinLOD = 0;
+
+	result = Core::pDevice->CreateSamplerState(&entSampDesc, &Core::pEntitySamplerState);
+
+	return true; 
 }
 
 void DXCore::initKeyboard()

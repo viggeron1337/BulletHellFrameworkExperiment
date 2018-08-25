@@ -6,6 +6,7 @@
 #include <DirectXMath.h>
 #include <d3d11.h>
 #include "DXCore.h"
+#include "WICTextureLoader.h"
 
 
 class Entity
@@ -19,10 +20,11 @@ private:
 	
 	float m_speed; 
 
-	ID3D11Texture2D* m_texture; 
-	ID3D11Resource* m_textureResource; 
+	ID3D11Texture2D* m_pTexture; 
+	ID3D11ShaderResourceView* m_pTextureResourceView; 
+	ID3D11Resource* m_pTextureResource; 
 	
-	D3D11_SHADER_RESOURCE_VIEW_DESC m_textureResourceView; 
+	D3D11_SHADER_RESOURCE_VIEW_DESC m_textureResourceViewDesc; 
 	D3D11_TEXTURE2D_DESC m_textureDesc; 
 
 	struct ENTITY_STRUCT
@@ -33,10 +35,8 @@ private:
 		float z_order; 
 	};
 
-	ID3D11InputLayout* m_vertexInputLayout;
-
 public:
-	Entity(std::string textureName, short typeOfInputLayout, DirectX::XMVECTOR position); 
+	Entity(std::string textureName, DirectX::XMVECTOR position, float width, float height); 
 	~Entity(); 
 
 	void updateMatrixes(); 

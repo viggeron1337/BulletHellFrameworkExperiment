@@ -20,6 +20,18 @@ namespace Core
 {
     extern ID3D11Device* pDevice;
 	extern ID3D11DeviceContext* pImmediateContext;
+
+	extern ID3D11VertexShader* pEntityVS; 
+	extern ID3D11GeometryShader* pEntityGS; 
+	extern ID3D11PixelShader* pEntityPS;
+
+	extern ID3D11InputLayout* pEntityInputLayout; 
+
+	extern ID3D11SamplerState* pEntitySamplerState; 
+
+	extern ID3D10Blob* VS; 
+	extern ID3D10Blob* GS; 
+	extern ID3D10Blob* PS;
 }
 
 class DXCore
@@ -89,6 +101,8 @@ protected:
 
 	//initialize Direct3D 
 	bool initDirect3D(); 
+	bool initVertexLayouts(); 
+	bool initSamplers(); 
 
 	void initKeyboard();
 
